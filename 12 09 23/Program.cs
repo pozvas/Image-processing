@@ -1,6 +1,8 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
+using System;
 using System.ComponentModel;
+using System.ComponentModel.Design;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
@@ -66,10 +68,15 @@ namespace image
             Console.WriteLine(second.YIK_Part(10, 10));
             */
 
-            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.Cenny.png");
-            //Borders.Cenny(image).Save("C:\\Users\\Василий\\Pictures\\5.Cenny.png", ImageFormat.Png);
-            Borders.Haff(image).Save("C:\\Users\\Василий\\Pictures\\5.Haff.png", ImageFormat.Png);
-            
+            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.Sobel.png");
+            //Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.Kenny.png", ImageFormat.Png);
+            //Borders.Moments(image);
+
+            Bitmap res = WaveletTransform.HaarWaveletTransform(image);
+            //res.Save("C:\\Users\\Василий\\Pictures\\5.Wavelet.png", ImageFormat.Png);
+            //WaveletTransform.InverseHaarWaveletTransform(res).Save("C:\\Users\\Василий\\Pictures\\5.ReserveWavelet.png", ImageFormat.Png);
+            //WaveletTransform.LowPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.LowPass.png", ImageFormat.Png);
+            //WaveletTransform.HighPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.HighPass.png", ImageFormat.Png);
         }
     }
     class CompareImage
@@ -324,47 +331,48 @@ namespace image
 
     static class Borders
     {
-        static private float[,] kernelY = { { -1, -2, -1 }, { 0, 0, 0 }, { 1, 2, 1 } };
-        static private float[,] kernelX = { { -1, 0, 1 }, { -2, 0, 2 }, { -1, 0, 1 } };
-        static public Bitmap Cenny(Bitmap imageOld)
+        static public Bitmap Kenny(Bitmap imageOld)
         {
-            Bitmap smoothImage = GaussianFilter(imageOld, 7, 1); // сглаживание изображения (удаление шума Гауссом)
-            double[,] angles = new double[imageOld.Width, imageOld.Height];
-            Bitmap sobelImage = Sobel(smoothImage, ref angles); // вычистление значения и направления градиентов
+            Bitmap smoothImage = GaussianFilter(imageOld, 3, 3); // сглаживание изображения (удаление шума Гауссом)
+            double[,] angles;
+            Bitmap sobelImage = Sobel(smoothImage, out angles); // вычистление значения и направления градиентов
             Bitmap maxImage = NoMax(sobelImage, ref angles); // подавление немаксимумов (оставляем только локальные максимумы в направлении градиента)
-            Bitmap thresholdIm = Threshold(maxImage, 0.45f, 0.6f); // подавление несуществующих контуров (сравниваем с пороговыми значениями)
+            Bitmap thresholdIm = Threshold(maxImage, 0.05f, 0.5f); // подавление несуществующих контуров (сравниваем с пороговыми значениями)
             Bitmap ambiguityIm = Ambiguity(thresholdIm); // смотриим связанность оставшихся пикселей (если они они не соприкасаются с отсальными пикселями - удаляем)
             return ambiguityIm;
         }
+        //толстая граница и что-то с моментами дллжно быть много
         static private Bitmap Ambiguity(Bitmap image) {
             Bitmap newIm = new Bitmap(image);
             for (int x = 0; x < image.Width; x++)
                 for (int y = 0; y < image.Height; y++)
                 {
-                    bool flag = false;
-                    for (int dx = -1; dx <= 1; dx++)
+                    if (image.GetPixel(x, y).R == 127)
                     {
-                        for (int dy = -1; dy <= 1; dy++)
+                        bool flag = false;
+                        for (int dx = -1; dx <= 1; dx++)
                         {
-                            int newX = x + dx;
-                            int newY = y + dy;
-                            if (newX >= 0 && newX < image.Width && newY >= 0 && newY < image.Height)
+                            for (int dy = -1; dy <= 1; dy++)
                             {
-                                Color neighborColor = image.GetPixel(newX, newY);
-
-                                // Если соседний пиксель также является граничным и его интенсивность превышает порог,
-                                // свяжите оба пикселя в контур
-                                if (neighborColor.R > 127)
+                                int newX = x + dx;
+                                int newY = y + dy;
+                                if (newX >= 0 && newX < image.Width && newY >= 0 && newY < image.Height)
                                 {
-                                    newIm.SetPixel(x, y, Color.FromArgb(255, 255, 255));
-                                    flag = true;
-                                    break;
+                                    Color neighborColor = image.GetPixel(newX, newY);
+
+                                    if (neighborColor.R > 127)
+                                    {
+                                        newIm.SetPixel(x, y, Color.FromArgb(255, 255, 255));
+                                        flag = true;
+                                        break;
+                                    }
                                 }
                             }
+                            if (flag)
+                                break;
+
                         }
-                        if (flag)
-                            break;
-                        else
+                        if (!flag)
                         {
                             newIm.SetPixel(x, y, Color.FromArgb(0, 0, 0));
                         }
@@ -388,116 +396,121 @@ namespace image
                 }
             return newIm;
         }
-        static private Bitmap NoMax(Bitmap image, ref double[,] angles)
+        static private Bitmap NoMax(Bitmap image, ref double[,] angles) // тут что-то не так
         {
             Bitmap newIm = new Bitmap(image); //356 397
             for (int x = 0; x < image.Width; x++)
+            {
                 for (int y = 0; y < image.Height; y++)
                 {
-                    int neighborX1 = (int)Math.Round(x + Math.Cos(angles[x, y]));
-                    int neighborY1 = (int)Math.Round(y + Math.Sin(angles[x, y]));
-                    int neighborX2 = (int)Math.Round(x - Math.Cos(angles[x, y]));
-                    int neighborY2 = (int)Math.Round(y - Math.Sin(angles[x, y]));
+                    double angle = angles[x, y];
 
-                    bool first = !(neighborY1 < 0 || neighborY1 >= image.Height || neighborX1 < 0 || neighborX1 >= image.Width);
-                    bool second = !(neighborY2 < 0 || neighborY2 >= image.Height || neighborX2 < 0 || neighborX2 >= image.Width);
+                    int neighborX1 = 0, neighborY1 = 0, neighborX2 = 0, neighborY2 = 0;
 
-                    if (first && second)
+                    if ((angle >= - Math.PI / 8 && angle < Math.PI / 8) || (angle >= 7 * Math.PI / 8 && angle <= 8 * Math.PI / 8) || (angle >= -8 * Math.PI / 8 && angle <= -7 * Math.PI / 8))
                     {
-                        if (!(image.GetPixel(x, y).B >= image.GetPixel(neighborX1, neighborY1).B && image.GetPixel(x, y).B >= image.GetPixel(neighborX2, neighborY2).B))
-                        {
-                            newIm.SetPixel(x, y, Color.Black);
-                        }
+                        neighborX1 = x + 1;
+                        neighborY1 = y + 1;
+                        neighborX2 = x - 1;
+                        neighborY2 = y - 1;
                     }
-                    else if (!first && second)
+                    else if ((angle >= Math.PI / 8 && angle < 3 * Math.PI / 8) || (angle >= -7 * Math.PI / 8 && angle < -5 * Math.PI / 8))
                     {
-                        if (!(image.GetPixel(x, y).B >= image.GetPixel(neighborX2, neighborY2).B))
-                        {
-                            newIm.SetPixel(x, y, Color.Black);
-                        }
+                        neighborX1 = x;
+                        neighborY1 = y + 1;
+                        neighborX2 = x;
+                        neighborY2 = y - 1;
                     }
-                    else if (first && !second)
+                    else if ((angle >= 3 * Math.PI / 8 && angle < 5 * Math.PI / 8) || (angle >= -5 * Math.PI / 8 && angle < -3 * Math.PI / 8))
                     {
-                        if (!(image.GetPixel(x, y).B >= image.GetPixel(neighborX1, neighborY1).B))
-                        {
-                            newIm.SetPixel(x, y, Color.Black);
-                        }
+                        neighborX1 = x - 1;
+                        neighborY1 = y + 1;
+                        neighborX2 = x + 1;
+                        neighborY2 = y - 1;
                     }
-                    else
+                    else if ((angle >= 5 * Math.PI / 8 && angle < 7 * Math.PI / 8) || (angle >= -3 * Math.PI / 8 && angle < -1 * Math.PI / 8))
+                    {
+                        neighborX1 = x - 1;
+                        neighborY1 = y;
+                        neighborX2 = x + 1;
+                        neighborY2 = y;
+                    }
+                    if (neighborX1 < 0 || neighborX1 >= image.Width || neighborY1 < 0 || neighborY1 >= image.Height ||
+                        neighborX2 < 0 || neighborX2 >= image.Width || neighborY2 < 0 || neighborY2 >= image.Height)
                     {
                         continue;
                     }
 
+                    if (image.GetPixel(x, y).B < image.GetPixel(neighborX1, neighborY1).B || image.GetPixel(x, y).B < image.GetPixel(neighborX2, neighborY2).B)
+                    {
+                        newIm.SetPixel(x, y, Color.Black);
+                    }
+
                 }
-            return newIm;
-                    
-        }
-        static private Bitmap Sobel(Bitmap sourceImage, ref double[,] angles)
-        {
-            Bitmap resultImage = new Bitmap(sourceImage.Width, sourceImage.Height);
-            var g = Graphics.FromImage(resultImage);
-            g.Clear(Color.White);
-            for (int i = 0; i < sourceImage.Width; i++)
-            {
-                for (int j = 0; j < sourceImage.Height; j++)
-                    resultImage.SetPixel(i, j, NewPixelSobel(sourceImage, i, j, ref angles[i,j]));
             }
-            return resultImage;
+            return newIm;
+
+        }
+        static private Bitmap Sobel(Bitmap sourceImage, out double[,] angles)
+        {
+            int[,] kernelX = {
+            { -1, 0, 1 },
+            { -2, 0, 2 },
+            { -1, 0, 1 }
+        };
+
+            int[,] kernelY = {
+            { -1, -2, -1 },
+            { 0, 0, 0 },
+            { 1, 2, 1 }
+        };
+
+            int width = sourceImage.Width;
+            int height = sourceImage.Height;
+
+            Bitmap outputImage = new Bitmap(width, height);
+            angles = new double[width, height];
+
+            for (int x = 1; x < width - 1; x++)
+            {
+                for (int y = 1; y < height - 1; y++)
+                {
+                    int gx = 0, gy = 0;
+
+                    for (int i = -1; i <= 1; i++)
+                    {
+                        for (int j = -1; j <= 1; j++)
+                        {
+                            int idX1 = Clamp(x + i, 0, sourceImage.Width - 1);
+                            int idY1 = Clamp(y + j, 0, sourceImage.Height - 1);
+
+                            Color pixel = sourceImage.GetPixel(idX1, idY1);
+                            int gray = (int)(pixel.R * 0.299 + pixel.G * 0.587 + pixel.B * 0.114);
+
+                            gx += gray * kernelX[i + 1, j + 1];
+                            gy += gray * kernelY[i + 1, j + 1];
+                        }
+                    }
+
+                    int magnitude = (int)Math.Sqrt(gx * gx + gy * gy);
+
+                    magnitude = Math.Min(255, Math.Max(0, magnitude));
+
+                    double angle = Math.Atan2(gy, gx);
+
+                    angles[x, y] = angle;
+
+                    outputImage.SetPixel(x, y, Color.FromArgb(magnitude, magnitude, magnitude));
+                }
+            }
+
+            return outputImage;
         }
         static private int Clamp(int value, int min, int max)
         {
             if (value > max) return max;
             if (value < min) return min;
             return value;
-        }
-        static private Color NewPixelSobel(Bitmap sourceImage, int i, int j, ref double angle)
-        {
-            float resultRY = 0, resultGY = 0, resultBY = 0;
-            int radiusX1 = kernelY.GetLength(0) / 2;
-            int radiusY1 = kernelY.GetLength(1) / 2;
-
-            float resultRX = 0, resultGX = 0, resultBX = 0;
-            int radiusX2 = kernelX.GetLength(0) / 2;
-            int radiusY2 = kernelX.GetLength(1) / 2;
-
-
-            for (int l = -radiusY1; l <= radiusY1; l++)
-            {
-                for (int k = -radiusX1; k <= radiusX1; k++)
-                {
-                    int idX1 = Clamp(i + k, 0, sourceImage.Width - 1);
-                    int idY1 = Clamp(j + l, 0, sourceImage.Height - 1);
-
-                    Color neighborColor = sourceImage.GetPixel(idX1, idY1);
-
-                    resultRY += neighborColor.R * kernelY[k + radiusX1, l + radiusY1];
-                    //resultGY += neighborColor.G * kernelY[k + radiusX1, l + radiusY1];
-                    //resultBY += neighborColor.B * kernelY[k + radiusX1, l + radiusY1];
-                }
-            }
-
-            for (int l = -radiusY2; l <= radiusY2; l++)
-            {
-                for (int k = -radiusX2; k <= radiusX2; k++)
-                {
-                    int idX2 = Clamp(i + k, 0, sourceImage.Width - 1);
-                    int idY2 = Clamp(j + l, 0, sourceImage.Height - 1);
-
-                    Color neighborColor = sourceImage.GetPixel(idX2, idY2);
-
-                    resultRX += neighborColor.R * kernelX[k + radiusX2, l + radiusY2];
-                    //resultGX += neighborColor.G * kernelX[k + radiusX2, l + radiusY2];
-                   // resultBX += neighborColor.B * kernelX[k + radiusX2, l + radiusY2];
-                }
-            }
-            float resultR = (float)Math.Sqrt(Math.Pow(resultRX, 2) + Math.Pow(resultRY, 2));
-            //float resultG = (float)Math.Sqrt(Math.Pow(resultGX, 2) + Math.Pow(resultGY, 2));
-            //float resultB = (float)Math.Sqrt(Math.Pow(resultGX, 2) + Math.Pow(resultGY, 2));
-
-            angle = Math.Round(Math.Atan2(resultRX, resultRY) / Math.PI * 4d) * Math.PI / 4; 
-            //angle = Math.Atan2(resultBX, resultBY);
-
-            return Color.FromArgb(Clamp((int)resultR, 0, 255), Clamp((int)resultR, 0, 255), Clamp((int)resultR, 0, 255));
         }
         static private Bitmap GaussianFilter(Bitmap image, int radius, float sigma)
         {
@@ -541,23 +554,64 @@ namespace image
         }
 
 
-        static public Bitmap Haff(Bitmap im)
+        static public void Moments(Bitmap im)
         {
             Bitmap image = new Bitmap(im);
 
+            int[,] objs = new int[image.Width, image.Height];
+            int objNum = 1;
+            Array.Clear(objs);
+
             Bitmap binaryImage = ApplyThreshold(im, 128);
 
-            Point centerOfMass = CalculateCenterOfMass(binaryImage);
-
-            using (Graphics g = Graphics.FromImage(image))
+            for (int x = 0; x < binaryImage.Width; x++)
             {
-                g.DrawEllipse(Pens.Red, centerOfMass.X - 5, centerOfMass.Y - 5, 10, 10);
-                image.SetPixel(centerOfMass.X, centerOfMass.Y, Color.Red);
+                for (int y = 0; y < binaryImage.Height; y++)
+                {
+                    if (binaryImage.GetPixel(x, y).R == 255)
+                    {
+                        int a = binaryImage.GetPixel(x, y).A;
+                        SearchObj(binaryImage, objs, x, y, objNum);
+                        objNum++;
+                    }
+                }
             }
 
-            return image;
-        }
+            for (int i = 1; i <= objNum; i++)
+            {
+                Console.WriteLine("Object " + i);
+                Console.WriteLine("Simple moments");
+                for (int p = 0; p < 3; p++)
+                    for (int q = 0; q < 3; q++)
+                    {
+                        Console.WriteLine("M" + p + q + " = " + FindSimpleMoment(objs, i, p, q));
+                    }
+                Console.WriteLine("Central moments");
+                for (int p = 0; p < 3; p++)
+                    for (int q = 0; q < 3; q++)
+                    {
+                        Console.WriteLine("M" + p + q + " = " + FindCentralMoment(objs, i, p, q));
+                    }
+            }
 
+        }
+        static private void SearchObj(Bitmap image, int[,] arr, int x, int y, int objNum)
+        {
+            arr[x, y] = objNum;
+            for (int i = -1; i < 2; i++)
+            {
+                for (int j = -1; j < 2; j++)
+                {
+                    if (x + i >=  arr.GetLength(0) || y + j >= arr.GetLength(1) || x + i < 0 || y + j < 0)
+                        continue;
+                    if (arr[x + i, y + j] == 0 && image.GetPixel(x + i, y + j).R == 255)
+                    {
+                        arr[x + i, y + j] = objNum;
+                        SearchObj(image, arr, x + i, y + j, objNum);
+                    }
+                }
+            }
+        }
         static private Bitmap ApplyThreshold(Bitmap grayImage, int threshold)
         {
             Bitmap binaryImage = new Bitmap(grayImage.Width, grayImage.Height);
@@ -572,39 +626,316 @@ namespace image
                     binaryImage.SetPixel(x, y, binaryColor);
                 }
             }
-
+            binaryImage.Save("C:\\Users\\Василий\\Pictures\\5.Binary.png", ImageFormat.Png);
             return binaryImage;
         }
-        static private Point CalculateCenterOfMass(Bitmap binaryImage)
+        static private double FindSimpleMoment(int[,] objs, int objNum, int p, int q)
         {
-            int sumX = 0;
-            int sumY = 0;
-            int count = 0;
-
-            for (int x = 0; x < binaryImage.Width; x++)
-            {
-                for (int y = 0; y < binaryImage.Height; y++)
+            double res = 0;
+            for (int i = 0; i < objs.GetLength(0); i++)
+                for (int j = 0; j < objs.GetLength(1); j++)
                 {
-                    Color pixel = binaryImage.GetPixel(x, y);
-                    if (pixel.R == 255) 
+                    if (objs[i, j] == objNum)
                     {
-                        sumX += x;
-                        sumY += y;
-                        count++;
+                        res += Math.Pow(i, p) * Math.Pow(j, q);
                     }
+                }
+            return res;
+        }
+        static private double FindCentralMoment(int[,] objs, int objNum, int p, int q)
+        {
+            double res = 0;
+            double M00 = FindSimpleMoment(objs, objNum, 0, 0);
+            double M10 = FindSimpleMoment(objs, objNum, 1, 0);
+            double M01 = FindSimpleMoment(objs, objNum, 0, 1);
+
+            double xCent = M10 / M00;
+            double yCent = M01 / M00;
+
+            for (int i = 0; i < objs.GetLength(0); i++)
+                for (int j = 0; j < objs.GetLength(1); j++)
+                {
+                    if (objs[i, j] == objNum)
+                    {
+                        res += Math.Pow(i - xCent, p) * Math.Pow(j - yCent, q);
+                    }
+                }
+            return res;
+        }
+    }
+
+    static class WaveletTransform
+    {
+        static public Bitmap HaarWaveletTransform(Bitmap im)
+        {
+            double[,] image = LoadImageToData(im);
+            int rows = image.GetLength(0);
+            int cols = image.GetLength(1);
+
+            for (int i = 0; i < rows; i++)
+            {
+                double[] row = new double[cols];
+                for (int j = 0; j < cols; j++)
+                {
+                    row[j] = image[i, j];
+                }
+                HaarWaveletTransform1D(row);
+
+                for (int j = 0; j < cols; j++)
+                {
+                    image[i, j] = row[j];
                 }
             }
 
-            if (count > 0)
+            for (int j = 0; j < cols; j++)
             {
-                int centerX = sumX / count;
-                int centerY = sumY / count;
-                return new Point(centerX, centerY);
+                double[] column = new double[rows];
+                for (int i = 0; i < rows; i++)
+                {
+                    column[i] = image[i, j];
+                }
+                HaarWaveletTransform1D(column);
+
+                for (int i = 0; i < rows; i++)
+                {
+                    image[i, j] = column[i];
+                }
             }
-            else
+
+            return SaveDataToImage(image);
+        }
+        static void HaarWaveletTransform1D(double[] data)
+        {
+            int length = data.Length;
+
+            int half = length / 2;
+            double[] temp = new double[length];
+
+            for (int i = 0, j = 0; i < half; i++, j += 2)
             {
-                return Point.Empty; 
+                temp[i] = (data[j] + data[j + 1]) / Math.Sqrt(2);
+                temp[i + half] = (data[j] - data[j + 1]) / Math.Sqrt(2);
             }
+
+            Array.Copy(temp, data, length);
+        }
+        static public Bitmap InverseHaarWaveletTransform(Bitmap im)
+        {
+            double[,] image = LoadImageToData(im);
+            int rows = image.GetLength(0);
+            int cols = image.GetLength(1);
+
+            for (int j = 0; j < cols; j++)
+            {
+                double[] column = new double[rows];
+                for (int i = 0; i < rows; i++)
+                {
+                    column[i] = image[i, j];
+                }
+                InverseHaarWaveletTransform1D(column);
+
+                for (int i = 0; i < rows; i++)
+                {
+                    image[i, j] = column[i];
+                }
+            }
+
+            for (int i = 0; i < rows; i++)
+            {
+                double[] row = new double[cols];
+                for (int j = 0; j < cols; j++)
+                {
+                    row[j] = image[i, j];
+                }
+                InverseHaarWaveletTransform1D(row);
+
+                for (int j = 0; j < cols; j++)
+                {
+                    image[i, j] = row[j];
+                }
+            }
+            return SaveDataToImageInverse(image);
+        }
+
+        static void InverseHaarWaveletTransform1D(double[] data)
+        {
+            int length = data.Length;
+            int half = length / 2;
+
+            double[] temp = new double[length];
+
+            for (int i = 0, j = 0; i < half; i++, j += 2)
+            {
+                temp[j] = (data[i] + data[i + half]) / 2;
+                temp[j + 1] = (data[i] - data[i + half]) / 2;
+            }
+
+            Array.Copy(temp, data, length);
+        }
+
+        static public Bitmap LowPassFilter(Bitmap im)
+        {
+            double[,] image = LoadImageToData(im);
+            int rows = image.GetLength(0);
+            int cols = image.GetLength(1);
+
+            for (int i = 0; i < rows; i++)
+            {
+                double[] row = new double[cols];
+                for (int j = 0; j < cols; j++)
+                {
+                    row[j] = image[i, j];
+                }
+                LowPassFilter1D(row);
+
+                for (int j = 0; j < cols; j++)
+                {
+                    image[i, j] = row[j];
+                }
+            }
+
+            for (int j = 0; j < cols; j++)
+            {
+                double[] column = new double[rows];
+                for (int i = 0; i < rows; i++)
+                {
+                    column[i] = image[i, j];
+                }
+                LowPassFilter1D(column);
+
+                for (int i = 0; i < rows; i++)
+                {
+                    image[i, j] = column[i];
+                }
+            }
+
+            return SaveDataToImage(image);
+        }
+        static void LowPassFilter1D(double[] data)
+        {
+            int length = data.Length;
+            int half = length / 2;
+
+            double[] temp = new double[length];
+
+            for (int i = 0, j = 0; i < half; i++, j += 2)
+            {
+                temp[j] = (data[j] + data[j + 1]) / 2;
+                temp[j + 1] = (data[j] + data[j + 1]) / 2;
+            }
+
+            Array.Copy(temp, data, length);
+        }
+        static public Bitmap HighPassFilter(Bitmap im)
+        {
+            double[,] image = LoadImageToData(im);
+            int rows = image.GetLength(0);
+            int cols = image.GetLength(1);
+
+            for (int i = 0; i < rows; i++)
+            {
+                double[] row = new double[cols];
+                for (int j = 0; j < cols; j++)
+                {
+                    row[j] = image[i, j];
+                }
+                HighPassFilter1D(row);
+
+                for (int j = 0; j < cols; j++)
+                {
+                    image[i, j] = row[j];
+                }
+            }
+
+            for (int j = 0; j < cols; j++)
+            {
+                double[] column = new double[rows];
+                for (int i = 0; i < rows; i++)
+                {
+                    column[i] = image[i, j];
+                }
+                HighPassFilter1D(column);
+
+                for (int i = 0; i < rows; i++)
+                {
+                    image[i, j] = column[i];
+                }
+            }
+
+            return SaveDataToImage(image);
+        }
+        static void HighPassFilter1D(double[] data)
+        {
+            int length = data.Length;
+            int half = length / 2;
+
+            double[] temp = new double[length];
+
+            for (int i = 0, j = 0; i < half; i++, j += 2)
+            {
+                temp[j] = (data[j] - data[j + 1]) / 2;
+                temp[j + 1] = (data[j] - data[j + 1]) / 2;
+            }
+
+            Array.Copy(temp, data, length);
+        }
+        static double[,] LoadImageToData(Bitmap image)
+        {
+            int width = image.Width;
+            int height = image.Height;
+
+            double[,] data = new double[width, height];
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    Color pixelColor = image.GetPixel(x, y);
+                    data[x, y] = pixelColor.R;
+                }
+            }
+
+            return data;
+        }
+
+        static Bitmap SaveDataToImage(double[,] data)
+        {
+            int width = data.GetLength(0);
+            int height = data.GetLength(1);
+
+            Bitmap resultImage = new Bitmap(width, height);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int pixelValue;
+                    pixelValue = (int)((data[x, y] + 255 ) / 2);
+                    Color pixelColor = Color.FromArgb(pixelValue, pixelValue, pixelValue);
+                    resultImage.SetPixel(x, y, pixelColor);
+                }
+            }
+
+            return resultImage;
+        }
+        static Bitmap SaveDataToImageInverse(double[,] data)
+        {
+            int width = data.GetLength(0);
+            int height = data.GetLength(1);
+
+            Bitmap resultImage = new Bitmap(width, height);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int pixelValue = (int)(data[x, y]);
+                    Color pixelColor = Color.FromArgb(pixelValue, pixelValue, pixelValue);
+                    resultImage.SetPixel(x, y, pixelColor);
+                }
+            }
+
+            return resultImage;
         }
     }
 }
