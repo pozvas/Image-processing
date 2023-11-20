@@ -68,10 +68,10 @@ namespace image
             Console.WriteLine(second.YIK_Part(10, 10));
             */
 
-            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.png");
-            //Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.Kenny.png", ImageFormat.Png);
+            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.1.png");
+            Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.1.Kenny.png", ImageFormat.Png);
             Bitmap image2 = new Bitmap("C:\\Users\\Василий\\Pictures\\6.jpg");
-            Borders.Moments(image2);
+            //Borders.Moments(image2);
 
             /*Bitmap res = WaveletTransform.HaarWaveletTransform(image);
             res.Save("C:\\Users\\Василий\\Pictures\\5.Wavelet.png", ImageFormat.Png);
@@ -336,73 +336,98 @@ namespace image
         {
             Bitmap smoothImage = GaussianFilter(imageOld, 3, 3); // сглаживание изображения (удаление шума Гауссом)
             double[,] angles;
-            Bitmap sobelImage = Sobel(smoothImage, out angles); // вычистление значения и направления градиентов
-            Bitmap maxImage = NoMax(sobelImage, ref angles); // подавление немаксимумов (оставляем только локальные максимумы в направлении градиента)
-            Bitmap thresholdIm = Threshold(maxImage, 0.05f, 0.5f); // подавление несуществующих контуров (сравниваем с пороговыми значениями)
+            double[,] sobelImage = Sobel(smoothImage, out angles); // вычистление значения и направления градиентов
+            double[,] maxImage = NoMax(sobelImage, ref angles); // подавление немаксимумов (оставляем только локальные максимумы в направлении градиента)
+            Bitmap thresholdIm = Threshold(maxImage, 0.05f, 0.55f); // подавление несуществующих контуров (сравниваем с пороговыми значениями)
             Bitmap ambiguityIm = Ambiguity(thresholdIm); // смотриим связанность оставшихся пикселей (если они они не соприкасаются с отсальными пикселями - удаляем)
+            thresholdIm.Save("C:\\Users\\Василий\\Pictures\\5.1.Екуыр.png", ImageFormat.Png);
             return ambiguityIm;
         }
         //толстая граница и что-то с моментами дллжно быть много
         static private Bitmap Ambiguity(Bitmap image) {
             Bitmap newIm = new Bitmap(image);
-            for (int x = 0; x < image.Width; x++)
-                for (int y = 0; y < image.Height; y++)
-                {
-                    if (image.GetPixel(x, y).R == 127)
+            int changes = 0;
+            do
+            {
+                changes = 0;
+                for (int x = 0; x < image.Width; x++)
+                    for (int y = 0; y < image.Height; y++)
                     {
-                        bool flag = false;
-                        for (int dx = -1; dx <= 1; dx++)
+                        if (newIm.GetPixel(x, y).R == 127)
                         {
-                            for (int dy = -1; dy <= 1; dy++)
+                            bool flag = false;
+                            for (int dx = -1; dx <= 1; dx++)
                             {
-                                int newX = x + dx;
-                                int newY = y + dy;
-                                if (newX >= 0 && newX < image.Width && newY >= 0 && newY < image.Height)
+                                for (int dy = -1; dy <= 1; dy++)
                                 {
-                                    Color neighborColor = image.GetPixel(newX, newY);
-
-                                    if (neighborColor.R > 127)
+                                    int newX = x + dx;
+                                    int newY = y + dy;
+                                    if (newX >= 0 && newX < image.Width && newY >= 0 && newY < image.Height)
                                     {
-                                        newIm.SetPixel(x, y, Color.FromArgb(255, 255, 255));
-                                        flag = true;
-                                        break;
+                                        Color neighborColor = newIm.GetPixel(newX, newY);
+
+                                        if (neighborColor.R > 127)
+                                        {
+                                            newIm.SetPixel(x, y, Color.FromArgb(255, 255, 255));
+                                            changes++;
+                                            flag = true;
+                                            break;
+                                        }
                                     }
                                 }
-                            }
-                            if (flag)
-                                break;
+                                if (flag)
+                                    break;
 
-                        }
-                        if (!flag)
-                        {
-                            newIm.SetPixel(x, y, Color.FromArgb(0, 0, 0));
+                            }
+                            /*if (!flag)
+                            {
+                                newIm.SetPixel(x, y, Color.FromArgb(0, 0, 0));
+                            }*/
                         }
                     }
-                }
-            return newIm;
-        }
-        static private Bitmap Threshold(Bitmap image, float low_p, float high_p) { // пороги в долях от 0 до 1
-            int low = (int)(low_p * 255f);
-            int high = (int)(high_p * 255f);
-            Bitmap newIm = new Bitmap(image.Width, image.Height);
+            } while (changes != 0);
             for (int x = 0; x < image.Width; x++)
                 for (int y = 0; y < image.Height; y++)
                 {
-                    if (image.GetPixel(x, y).B > high)
+                    if (newIm.GetPixel(x, y).R == 127)
+                    {
+                        newIm.SetPixel(x, y, Color.FromArgb(0, 0, 0));
+                    }
+                }
+           return newIm;
+        }
+        static private Bitmap Threshold(double[,] image, float low_p, float high_p) { // пороги в долях от 0 до 1
+            double max = 0.0;
+            for (int x = 0; x < image.GetLength(0); x++)
+                for (int y = 0; y < image.GetLength(1); y++)
+                {
+                    if (image[x, y] > max)
+                        max = image[x, y];
+                }
+            int low = (int)(low_p * max);
+            int high = (int)(high_p * max);
+            
+            Bitmap newIm = new Bitmap(image.GetLength(0), image.GetLength(1));
+
+            for (int x = 0; x < image.GetLength(0); x++)
+                for (int y = 0; y < image.GetLength(1); y++)
+                {
+                    if (image[x, y] > high)
                         newIm.SetPixel(x, y, Color.FromArgb(255, 255, 255));
-                    else if (image.GetPixel(x, y).B < low)
+                    else if (image[x, y] < low)
                         newIm.SetPixel(x, y, Color.FromArgb(0, 0, 0));
                     else
                         newIm.SetPixel(x, y, Color.FromArgb(127, 127, 127));
                 }
             return newIm;
         }
-        static private Bitmap NoMax(Bitmap image, ref double[,] angles) // тут что-то не так
+        static double[,] NoMax(double[,] image, ref double[,] angles) // тут что-то не так
         {
-            Bitmap newIm = new Bitmap(image); //356 397
-            for (int x = 0; x < image.Width; x++)
+            //Bitmap newIm = new Bitmap(image); //356 397
+            double[,] res = (double[,])image.Clone();
+            for (int x = 0; x < image.GetLength(0); x++)
             {
-                for (int y = 0; y < image.Height; y++)
+                for (int y = 0; y < image.GetLength(1); y++)
                 {
                     double angle = angles[x, y];
 
@@ -410,49 +435,49 @@ namespace image
 
                     if ((angle >= - Math.PI / 8 && angle < Math.PI / 8) || (angle >= 7 * Math.PI / 8 && angle <= 8 * Math.PI / 8) || (angle >= -8 * Math.PI / 8 && angle <= -7 * Math.PI / 8))
                     {
-                        neighborX1 = x + 1;
-                        neighborY1 = y + 1;
-                        neighborX2 = x - 1;
-                        neighborY2 = y - 1;
-                    }
-                    else if ((angle >= Math.PI / 8 && angle < 3 * Math.PI / 8) || (angle >= -7 * Math.PI / 8 && angle < -5 * Math.PI / 8))
-                    {
                         neighborX1 = x;
                         neighborY1 = y + 1;
                         neighborX2 = x;
                         neighborY2 = y - 1;
                     }
-                    else if ((angle >= 3 * Math.PI / 8 && angle < 5 * Math.PI / 8) || (angle >= -5 * Math.PI / 8 && angle < -3 * Math.PI / 8))
+                    else if ((angle >= Math.PI / 8 && angle < 3 * Math.PI / 8) || (angle >= -7 * Math.PI / 8 && angle < -5 * Math.PI / 8))
                     {
                         neighborX1 = x - 1;
-                        neighborY1 = y + 1;
+                        neighborY1 = y - 1;
                         neighborX2 = x + 1;
-                        neighborY2 = y - 1;
+                        neighborY2 = y + 1;
+                    }
+                    else if ((angle >= 3 * Math.PI / 8 && angle < 5 * Math.PI / 8) || (angle >= -5 * Math.PI / 8 && angle < -3 * Math.PI / 8))
+                    {
+                        neighborX1 = x + 1;
+                        neighborY1 = y;
+                        neighborX2 = x - 1;
+                        neighborY2 = y;
                     }
                     else if ((angle >= 5 * Math.PI / 8 && angle < 7 * Math.PI / 8) || (angle >= -3 * Math.PI / 8 && angle < -1 * Math.PI / 8))
                     {
-                        neighborX1 = x - 1;
-                        neighborY1 = y;
-                        neighborX2 = x + 1;
-                        neighborY2 = y;
+                        neighborX1 = x + 1;
+                        neighborY1 = y - 1;
+                        neighborX2 = x - 1;
+                        neighborY2 = y + 1;
                     }
-                    if (neighborX1 < 0 || neighborX1 >= image.Width || neighborY1 < 0 || neighborY1 >= image.Height ||
-                        neighborX2 < 0 || neighborX2 >= image.Width || neighborY2 < 0 || neighborY2 >= image.Height)
+                    if (neighborX1 < 0 || neighborX1 >= image.GetLength(0) || neighborY1 < 0 || neighborY1 >= image.GetLength(1) ||
+                        neighborX2 < 0 || neighborX2 >= image.GetLength(0) || neighborY2 < 0 || neighborY2 >= image.GetLength(1))
                     {
                         continue;
                     }
 
-                    if (image.GetPixel(x, y).B < image.GetPixel(neighborX1, neighborY1).B || image.GetPixel(x, y).B < image.GetPixel(neighborX2, neighborY2).B)
+                    if (image[x, y] <= image[neighborX1, neighborY1] || image[x, y] <= image[neighborX2, neighborY2])
                     {
-                        newIm.SetPixel(x, y, Color.Black);
+                        res[x, y] = 0;
                     }
 
                 }
             }
-            return newIm;
+            return res;
 
         }
-        static private Bitmap Sobel(Bitmap sourceImage, out double[,] angles)
+        static private double[,] Sobel(Bitmap sourceImage, out double[,] angles)
         {
             int[,] kernelX = {
             { -1, 0, 1 },
@@ -465,10 +490,10 @@ namespace image
             { 0, 0, 0 },
             { 1, 2, 1 }
         };
-
+            
             int width = sourceImage.Width;
             int height = sourceImage.Height;
-
+            double[,] res = new double[width, height];
             Bitmap outputImage = new Bitmap(width, height);
             angles = new double[width, height];
 
@@ -486,26 +511,27 @@ namespace image
                             int idY1 = Clamp(y + j, 0, sourceImage.Height - 1);
 
                             Color pixel = sourceImage.GetPixel(idX1, idY1);
-                            int gray = (int)(pixel.R * 0.299 + pixel.G * 0.587 + pixel.B * 0.114);
+                            int gray = pixel.R;
+                            //int gray = (int)(pixel.R * 0.299 + pixel.G * 0.587 + pixel.B * 0.114);
 
                             gx += gray * kernelX[i + 1, j + 1];
                             gy += gray * kernelY[i + 1, j + 1];
                         }
                     }
 
-                    int magnitude = (int)Math.Sqrt(gx * gx + gy * gy);
+                    double magnitude = Math.Sqrt(gx * gx + gy * gy);
 
-                    magnitude = Math.Min(255, Math.Max(0, magnitude));
-
+                    //magnitude = Math.Min(255, Math.Max(0, magnitude));
+                    res[x, y] = magnitude;
                     double angle = Math.Atan2(gy, gx);
 
                     angles[x, y] = angle;
 
-                    outputImage.SetPixel(x, y, Color.FromArgb(magnitude, magnitude, magnitude));
+                    //outputImage.SetPixel(x, y, Color.FromArgb(magnitude, magnitude, magnitude));
                 }
             }
 
-            return outputImage;
+            return res;
         }
         static private int Clamp(int value, int min, int max)
         {
