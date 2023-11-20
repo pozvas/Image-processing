@@ -68,15 +68,16 @@ namespace image
             Console.WriteLine(second.YIK_Part(10, 10));
             */
 
-            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.Sobel.png");
+            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.png");
             //Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.Kenny.png", ImageFormat.Png);
-            //Borders.Moments(image);
+            Bitmap image2 = new Bitmap("C:\\Users\\Василий\\Pictures\\6.jpg");
+            Borders.Moments(image2);
 
-            Bitmap res = WaveletTransform.HaarWaveletTransform(image);
-            //res.Save("C:\\Users\\Василий\\Pictures\\5.Wavelet.png", ImageFormat.Png);
-            //WaveletTransform.InverseHaarWaveletTransform(res).Save("C:\\Users\\Василий\\Pictures\\5.ReserveWavelet.png", ImageFormat.Png);
-            //WaveletTransform.LowPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.LowPass.png", ImageFormat.Png);
-            //WaveletTransform.HighPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.HighPass.png", ImageFormat.Png);
+            /*Bitmap res = WaveletTransform.HaarWaveletTransform(image);
+            res.Save("C:\\Users\\Василий\\Pictures\\5.Wavelet.png", ImageFormat.Png);
+            WaveletTransform.InverseHaarWaveletTransform(res).Save("C:\\Users\\Василий\\Pictures\\5.ReserveWavelet.png", ImageFormat.Png);
+            WaveletTransform.LowPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.LowPass.png", ImageFormat.Png);
+            WaveletTransform.HighPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.HighPass.png", ImageFormat.Png);*/
         }
     }
     class CompareImage
@@ -568,7 +569,7 @@ namespace image
             {
                 for (int y = 0; y < binaryImage.Height; y++)
                 {
-                    if (binaryImage.GetPixel(x, y).R == 255)
+                    if (binaryImage.GetPixel(x, y).R == 255 && objs[x, y] == 0)
                     {
                         int a = binaryImage.GetPixel(x, y).A;
                         SearchObj(binaryImage, objs, x, y, objNum);
@@ -577,7 +578,7 @@ namespace image
                 }
             }
 
-            for (int i = 1; i <= objNum; i++)
+            for (int i = 1; i < objNum; i++)
             {
                 Console.WriteLine("Object " + i);
                 Console.WriteLine("Simple moments");
@@ -595,21 +596,33 @@ namespace image
             }
 
         }
-        static private void SearchObj(Bitmap image, int[,] arr, int x, int y, int objNum)
+        static private void SearchObj(Bitmap image, int[,] arr, int sx, int sy, int objNum)
         {
-            arr[x, y] = objNum;
-            for (int i = -1; i < 2; i++)
+            arr[sx, sy] = objNum;
+            List<List<int>> saves = new List<List<int>>
             {
-                for (int j = -1; j < 2; j++)
+                new List<int> { sx, sy }
+            };
+            while (saves.Count != 0)
+            {
+                List<int> p = saves[0];
+                int x = p[0];
+                int y = p[1];
+                for (int i = -1; i < 2; i++)
                 {
-                    if (x + i >=  arr.GetLength(0) || y + j >= arr.GetLength(1) || x + i < 0 || y + j < 0)
-                        continue;
-                    if (arr[x + i, y + j] == 0 && image.GetPixel(x + i, y + j).R == 255)
+                    for (int j = -1; j < 2; j++)
                     {
-                        arr[x + i, y + j] = objNum;
-                        SearchObj(image, arr, x + i, y + j, objNum);
+                        if (x + i >= arr.GetLength(0) || y + j >= arr.GetLength(1) || x + i < 0 || y + j < 0)
+                            continue;
+                        if (arr[x + i, y + j] == 0 && image.GetPixel(x + i, y + j).R == 255)
+                        {
+                            arr[x + i, y + j] = objNum;
+                            saves.Add(new List<int> { x + i, y + j });
+                            //SearchObj(image, arr, x + i, y + j, objNum);
+                        }
                     }
                 }
+                saves.Remove(p);
             }
         }
         static private Bitmap ApplyThreshold(Bitmap grayImage, int threshold)
@@ -626,7 +639,6 @@ namespace image
                     binaryImage.SetPixel(x, y, binaryColor);
                 }
             }
-            binaryImage.Save("C:\\Users\\Василий\\Pictures\\5.Binary.png", ImageFormat.Png);
             return binaryImage;
         }
         static private double FindSimpleMoment(int[,] objs, int objNum, int p, int q)
@@ -666,6 +678,7 @@ namespace image
 
     static class WaveletTransform
     {
+        static double[,] lastArr;
         static public Bitmap HaarWaveletTransform(Bitmap im)
         {
             double[,] image = LoadImageToData(im);
@@ -701,7 +714,7 @@ namespace image
                     image[i, j] = column[i];
                 }
             }
-
+            lastArr = (double[,])image.Clone();
             return SaveDataToImage(image);
         }
         static void HaarWaveletTransform1D(double[] data)
@@ -713,15 +726,15 @@ namespace image
 
             for (int i = 0, j = 0; i < half; i++, j += 2)
             {
-                temp[i] = (data[j] + data[j + 1]) / Math.Sqrt(2);
-                temp[i + half] = (data[j] - data[j + 1]) / Math.Sqrt(2);
+                temp[i] = (data[j] + data[j + 1]) / 2;
+                temp[i + half] = (data[j] - data[j + 1]) / 2;
             }
 
             Array.Copy(temp, data, length);
         }
         static public Bitmap InverseHaarWaveletTransform(Bitmap im)
         {
-            double[,] image = LoadImageToData(im);
+            double[,] image = lastArr;
             int rows = image.GetLength(0);
             int cols = image.GetLength(1);
 
@@ -766,8 +779,8 @@ namespace image
 
             for (int i = 0, j = 0; i < half; i++, j += 2)
             {
-                temp[j] = (data[i] + data[i + half]) / 2;
-                temp[j + 1] = (data[i] - data[i + half]) / 2;
+                temp[j] = (data[i] + data[i + half]) ;
+                temp[j + 1] = (data[i] - data[i + half]) ;
             }
 
             Array.Copy(temp, data, length);
@@ -897,6 +910,38 @@ namespace image
 
             return data;
         }
+        static double[,] LoadImageToDataInverse(Bitmap image)
+        {
+            int width = image.Width;
+            int height = image.Height;
+
+            double[,] data = new double[width, height];
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int pixelColor = image.GetPixel(x, y).R;
+                    if (x < width / 2)
+                    {
+                        if (y < height / 2)
+                        {
+                            data[x, y] = pixelColor;
+                        }
+                        else
+                        {
+                            data[x, y] = pixelColor - 128;
+                        }
+                    }
+                    else
+                    {
+                        data[x, y] = pixelColor - 128;
+                    }
+                }
+            }
+
+            return data;
+        }
 
         static Bitmap SaveDataToImage(double[,] data)
         {
@@ -910,7 +955,11 @@ namespace image
                 for (int x = 0; x < width; x++)
                 {
                     int pixelValue;
-                    pixelValue = (int)((data[x, y] + 255 ) / 2);
+                    if (data[x, y] < 0)
+                        pixelValue = (int)data[x, y] + 128;
+                    else
+                        pixelValue = (int)data[x, y];
+                    double a = data[x, y];
                     Color pixelColor = Color.FromArgb(pixelValue, pixelValue, pixelValue);
                     resultImage.SetPixel(x, y, pixelColor);
                 }
