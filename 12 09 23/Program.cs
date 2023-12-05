@@ -68,11 +68,15 @@ namespace image
             Console.WriteLine(second.YIK_Part(10, 10));
             */
 
-            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.1.png");
-            Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.1.Kenny.png", ImageFormat.Png);
-            Bitmap image2 = new Bitmap("C:\\Users\\Василий\\Pictures\\6.jpg");
+            Bitmap image = new Bitmap("C:\\Users\\Василий\\Pictures\\5.png");
+            //Borders.Kenny(image).Save("C:\\Users\\Василий\\Pictures\\5.1.Kenny.png", ImageFormat.Png);
+            //Bitmap image2 = new Bitmap("C:\\Users\\Василий\\Pictures\\6.jpg");
             //Borders.Moments(image2);
 
+            WaveletTransform.HaarWaveletTransform(image, 3).Save("C:\\Users\\Василий\\Pictures\\5.Wavelet3.png", ImageFormat.Png);
+            //WaveletTransform.SaveDataToImage(WaveletTransform.InverseHaarWaveletTransform(image, 3)).Save("C:\\Users\\Василий\\Pictures\\5.ReserveWavelet.png", ImageFormat.Png);
+            WaveletTransform.LowPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.LowPass.png", ImageFormat.Png);
+            WaveletTransform.HighPassFilter(image).Save("C:\\Users\\Василий\\Pictures\\5.HighPass.png", ImageFormat.Png);
             /*Bitmap res = WaveletTransform.HaarWaveletTransform(image);
             res.Save("C:\\Users\\Василий\\Pictures\\5.Wavelet.png", ImageFormat.Png);
             WaveletTransform.InverseHaarWaveletTransform(res).Save("C:\\Users\\Василий\\Pictures\\5.ReserveWavelet.png", ImageFormat.Png);
@@ -705,42 +709,47 @@ namespace image
     static class WaveletTransform
     {
         static double[,] lastArr;
-        static public Bitmap HaarWaveletTransform(Bitmap im)
+        static public Bitmap HaarWaveletTransform(Bitmap im, int deep)
         {
             double[,] image = LoadImageToData(im);
-            int rows = image.GetLength(0);
-            int cols = image.GetLength(1);
-
-            for (int i = 0; i < rows; i++)
+            int num = 1;
+            while (num <= deep)
             {
-                double[] row = new double[cols];
-                for (int j = 0; j < cols; j++)
-                {
-                    row[j] = image[i, j];
-                }
-                HaarWaveletTransform1D(row);
-
-                for (int j = 0; j < cols; j++)
-                {
-                    image[i, j] = row[j];
-                }
-            }
-
-            for (int j = 0; j < cols; j++)
-            {
-                double[] column = new double[rows];
+                int rows = image.GetLength(0) / (int)Math.Pow(2 ,(num - 1));
+                int cols = image.GetLength(1) / (int)Math.Pow(2, (num - 1));
+                Console.WriteLine((int)Math.Pow(2, (num - 1)));
                 for (int i = 0; i < rows; i++)
                 {
-                    column[i] = image[i, j];
-                }
-                HaarWaveletTransform1D(column);
+                    double[] row = new double[cols];
+                    for (int j = 0; j < cols; j++)
+                    {
+                        row[j] = image[i, j];
+                    }
+                    HaarWaveletTransform1D(row);
 
-                for (int i = 0; i < rows; i++)
-                {
-                    image[i, j] = column[i];
+                    for (int j = 0; j < cols; j++)
+                    {
+                        image[i, j] = row[j];
+                    }
                 }
+
+                for (int j = 0; j < cols; j++)
+                {
+                    double[] column = new double[rows];
+                    for (int i = 0; i < rows; i++)
+                    {
+                        column[i] = image[i, j];
+                    }
+                    HaarWaveletTransform1D(column);
+
+                    for (int i = 0; i < rows; i++)
+                    {
+                        image[i, j] = column[i];
+                    }
+                }
+                lastArr = (double[,])image.Clone();
+                num++;
             }
-            lastArr = (double[,])image.Clone();
             return SaveDataToImage(image);
         }
         static void HaarWaveletTransform1D(double[] data)
@@ -758,42 +767,47 @@ namespace image
 
             Array.Copy(temp, data, length);
         }
-        static public Bitmap InverseHaarWaveletTransform(Bitmap im)
+        static public double[,] InverseHaarWaveletTransform(Bitmap im, int deep)
         {
             double[,] image = lastArr;
-            int rows = image.GetLength(0);
-            int cols = image.GetLength(1);
-
-            for (int j = 0; j < cols; j++)
+            int num = deep;
+            while (num > 0)
             {
-                double[] column = new double[rows];
-                for (int i = 0; i < rows; i++)
-                {
-                    column[i] = image[i, j];
-                }
-                InverseHaarWaveletTransform1D(column);
-
-                for (int i = 0; i < rows; i++)
-                {
-                    image[i, j] = column[i];
-                }
-            }
-
-            for (int i = 0; i < rows; i++)
-            {
-                double[] row = new double[cols];
-                for (int j = 0; j < cols; j++)
-                {
-                    row[j] = image[i, j];
-                }
-                InverseHaarWaveletTransform1D(row);
+                int rows = image.GetLength(0) / (int)Math.Pow(2, (num - 1));
+                int cols = image.GetLength(1) / (int)Math.Pow(2, (num - 1));
 
                 for (int j = 0; j < cols; j++)
                 {
-                    image[i, j] = row[j];
+                    double[] column = new double[rows];
+                    for (int i = 0; i < rows; i++)
+                    {
+                        column[i] = image[i, j];
+                    }
+                    InverseHaarWaveletTransform1D(column);
+
+                    for (int i = 0; i < rows; i++)
+                    {
+                        image[i, j] = column[i];
+                    }
                 }
+
+                for (int i = 0; i < rows; i++)
+                {
+                    double[] row = new double[cols];
+                    for (int j = 0; j < cols; j++)
+                    {
+                        row[j] = image[i, j];
+                    }
+                    InverseHaarWaveletTransform1D(row);
+
+                    for (int j = 0; j < cols; j++)
+                    {
+                        image[i, j] = row[j];
+                    }
+                }
+                num--;
             }
-            return SaveDataToImageInverse(image);
+            return image;
         }
 
         static void InverseHaarWaveletTransform1D(double[] data)
@@ -814,41 +828,14 @@ namespace image
 
         static public Bitmap LowPassFilter(Bitmap im)
         {
-            double[,] image = LoadImageToData(im);
-            int rows = image.GetLength(0);
-            int cols = image.GetLength(1);
+            HaarWaveletTransform(im, 1);
 
-            for (int i = 0; i < rows; i++)
-            {
-                double[] row = new double[cols];
-                for (int j = 0; j < cols; j++)
+            for (int x = lastArr.GetLength(0) / 2; x < lastArr.GetLength(0); x++)
+                for (int y = lastArr.GetLength(1) / 2; y < lastArr.GetLength(1); y++)
                 {
-                    row[j] = image[i, j];
+                    lastArr[x, y] = 0;
                 }
-                LowPassFilter1D(row);
-
-                for (int j = 0; j < cols; j++)
-                {
-                    image[i, j] = row[j];
-                }
-            }
-
-            for (int j = 0; j < cols; j++)
-            {
-                double[] column = new double[rows];
-                for (int i = 0; i < rows; i++)
-                {
-                    column[i] = image[i, j];
-                }
-                LowPassFilter1D(column);
-
-                for (int i = 0; i < rows; i++)
-                {
-                    image[i, j] = column[i];
-                }
-            }
-
-            return SaveDataToImage(image);
+            return SaveDataToImage(InverseHaarWaveletTransform(im, 1));
         }
         static void LowPassFilter1D(double[] data)
         {
@@ -867,41 +854,13 @@ namespace image
         }
         static public Bitmap HighPassFilter(Bitmap im)
         {
-            double[,] image = LoadImageToData(im);
-            int rows = image.GetLength(0);
-            int cols = image.GetLength(1);
-
-            for (int i = 0; i < rows; i++)
-            {
-                double[] row = new double[cols];
-                for (int j = 0; j < cols; j++)
+            HaarWaveletTransform(im, 1);
+            for (int x = 0; x < lastArr.GetLength(0) / 2; x++)
+                for (int y = 0; y < lastArr.GetLength(1) / 2; y++)
                 {
-                    row[j] = image[i, j];
+                    lastArr[x, y] = 0;
                 }
-                HighPassFilter1D(row);
-
-                for (int j = 0; j < cols; j++)
-                {
-                    image[i, j] = row[j];
-                }
-            }
-
-            for (int j = 0; j < cols; j++)
-            {
-                double[] column = new double[rows];
-                for (int i = 0; i < rows; i++)
-                {
-                    column[i] = image[i, j];
-                }
-                HighPassFilter1D(column);
-
-                for (int i = 0; i < rows; i++)
-                {
-                    image[i, j] = column[i];
-                }
-            }
-
-            return SaveDataToImage(image);
+            return SaveDataToImage(InverseHaarWaveletTransform(im, 1));
         }
         static void HighPassFilter1D(double[] data)
         {
@@ -969,7 +928,7 @@ namespace image
             return data;
         }
 
-        static Bitmap SaveDataToImage(double[,] data)
+        static public Bitmap SaveDataToImage(double[,] data)
         {
             int width = data.GetLength(0);
             int height = data.GetLength(1);
@@ -983,6 +942,8 @@ namespace image
                     int pixelValue;
                     if (data[x, y] < 0)
                         pixelValue = (int)data[x, y] + 128;
+                    else if (data[x, y] > 255)
+                        pixelValue = (int)data[x, y] - 128;
                     else
                         pixelValue = (int)data[x, y];
                     double a = data[x, y];
@@ -993,7 +954,7 @@ namespace image
 
             return resultImage;
         }
-        static Bitmap SaveDataToImageInverse(double[,] data)
+        static Bitmap SaveDataToImageHighPass(double[,] data)
         {
             int width = data.GetLength(0);
             int height = data.GetLength(1);
@@ -1004,7 +965,19 @@ namespace image
             {
                 for (int x = 0; x < width; x++)
                 {
-                    int pixelValue = (int)(data[x, y]);
+                    double[,] n = data;
+                    int pixelValue;
+                    if (data[x, y] < 0 && data[x,y] >= -255)
+                        pixelValue = (int)((data[x, y] + 255));
+                    else if (data[x, y] < -255)
+                        pixelValue = (int)((data[x, y] + 255 * 2));
+                    else if (data[x, y] > 255 && data[x,y] <= 255 * 2)
+                        pixelValue = (int)((data[x, y] - 255));
+                    else if (data[x, y] > 255 * 2)
+                        pixelValue = (int)((data[x, y] - 255 * 2));
+                    else
+                        pixelValue = (int)data[x, y];
+                    double a = data[x, y];
                     Color pixelColor = Color.FromArgb(pixelValue, pixelValue, pixelValue);
                     resultImage.SetPixel(x, y, pixelColor);
                 }
